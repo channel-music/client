@@ -1,0 +1,4 @@
+*.pyc
+__pycache__/
+channel.egg-info/
+.eggs/
