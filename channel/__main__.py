@@ -84,9 +84,13 @@ class SongListView(Gtk.TreeView):
             pass
         else:
             if event.type == Gdk.EventType._2BUTTON_PRESS:
-                path, _, _, _ = treeview.get_path_at_pos(event.x, event.y)
-                song_id = treeview.get_model()[path][0]
-                callback(self._songs[song_id])
+                try:
+                    path, _, _, _ = treeview.get_path_at_pos(event.x, event.y)
+                except TypeError:  # not iterable
+                    pass
+                else:
+                    song_id = treeview.get_model()[path][0]
+                    callback(self._songs[song_id])
 
 
 class MusicActionBar(Gtk.ActionBar):
@@ -111,19 +115,28 @@ class ApplicationWindow(Gtk.ApplicationWindow):
         self.player = media.Player()
 
         self.song_list = SongListView()
-        self.song_list.on_double_click(self.on_song_double_clicked)
+        self.song_list.on_double_click(self.on_song_list_double_clicked)
+        self.play_list = SongListView()
+        self.play_list.on_double_click(self.on_play_list_double_clicked)
 
-        scrolled = Gtk.ScrolledWindow()
-        scrolled.add(self.song_list)
+        song_list_scrolled = Gtk.ScrolledWindow()
+        song_list_scrolled.add(self.song_list)
+
+        play_list_scrolled = Gtk.ScrolledWindow()
+        play_list_scrolled.add(self.play_list)
 
         actionbar = MusicActionBar()
         actionbar.play_button.connect('clicked', self.on_play_clicked)
         actionbar.next_button.connect('clicked', self.on_next_clicked)
         actionbar.prev_button.connect('clicked', self.on_prev_clicked)
 
+        music_list_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        music_list_box.pack_start(song_list_scrolled, True, True, 0)
+        music_list_box.pack_start(play_list_scrolled, True, True, 2)
+
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL,
                       spacing=5, border_width=12)
-        box.pack_start(scrolled, True, True, 0)
+        box.pack_start(music_list_box, True, True, 0)
         box.pack_start(actionbar, False, True, 2)
         self.add(box)
 
@@ -144,7 +157,12 @@ class ApplicationWindow(Gtk.ApplicationWindow):
         logger.debug('Previous button pressed')
         self.player.previous_track()
 
-    def on_song_double_clicked(self, song):
+    def on_song_list_double_clicked(self, song):
+        logger.debug('Adding song to play list: %r' % repr(song))
+        self.player.queue(song)
+        self.play_list.append(song)
+
+    def on_play_list_double_clicked(self, song):
         logger.debug('Playing song: %r' % repr(song))
         self.player.jump_to(song)
 
@@ -157,7 +175,6 @@ class ApplicationWindow(Gtk.ApplicationWindow):
         else:
             for song_dict in songs.json():
                 song = media.Song(**song_dict)
-                self.player.queue(song)
                 self.song_list.append(song)
 
 
