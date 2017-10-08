@@ -7,7 +7,6 @@ from gi.repository import Gdk, Gtk, GLib, Gio
 from channel import api, media
 from channel.ui.unix.song_list_view import SongListView
 
-
 logger = logging.getLogger(__name__)
 
 

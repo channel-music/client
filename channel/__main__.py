@@ -1,12 +1,9 @@
 import logging
 import sys
 
-from channel.ui.unix.application import Application
-from channel.ui.unix.threading import GLibThreadPoolExecutor
+from channel.ui import start_app
 
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
-    with GLibThreadPoolExecutor(max_workers=5) as pool:
-        app = Application(thread_pool=pool)
-        app.run(sys.argv)
+    start_app(sys.argv)
