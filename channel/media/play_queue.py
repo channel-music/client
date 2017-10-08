@@ -65,6 +65,7 @@ class PlayQueue:
 
     def jump_to(self, item):
         """Jump to a specific item in the queue."""
+        # FIXME: throw a missing song exception
         index = self._tracks.index(item)
         self._current_idx = index
 

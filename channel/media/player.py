@@ -81,6 +81,7 @@ class Player:
             self._play_queue.reset()
         self.play()
 
+    # FIXME: don't go to previous song after N seconds
     def previous_track(self):
         """Stop the current song and play the previous one in the queue.
 
@@ -127,6 +128,17 @@ class Player:
         """
         self._player.set_state(Gst.State.PAUSED)
         self._current_state = PlayerState.PAUSED
+
+    def jump_to(self, song):
+        """Jump player to a given song.
+
+        Will stop the current song and move to the new one. The play queue will
+        be reorganized.
+        """
+        # FIXME: handle failures
+        self.stop()
+        self._play_queue.jump_to(song)
+        self.play()
 
     def _ensure_stopped(self):
         if self._current_state is PlayerState.PLAYING:

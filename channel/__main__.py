@@ -29,41 +29,64 @@ def add_treeview_column(treeview, text, index=0):
 
 
 # Not really appropriate to inherit from, but whatever
-class SongListView:
-    def __init__(self, displayed_fields, hidden_fields=None):
-        hidden_fields = hidden_fields or []
+class SongListView(Gtk.TreeView):
+    displayed_fields = [
+        (int, '#', 'track'),
+        (str, 'Title', 'title'),
+        (str, 'Album', 'album'),
+        (str, 'Artist', 'artist'),
+    ]
+
+    hidden_fields = [
+        (int, 'id'),
+    ]
+
+    def __init__(self):
+        self._list_store = Gtk.ListStore(*self._field_types())
+        super().__init__(model=self._list_store)
+        self._songs = {}
         self._callbacks = {}
-        self._list_store = Gtk.ListStore(*field_types)
-        self._tree_view = Gtk.TreeView(model=self._list_store)
 
-        self.tree_view.connect('button-press-event', self._on_cell_clicked)
+        self.connect('button-press-event', self._on_cell_clicked)
 
-        for field in displayed_fields:
+        for idx, display_name in enumerate(self._field_display_names()):
             add_treeview_column(
-                self._tree_view,
-                field['display_name'],
-                idx + len(hidden_fields)
+                self, display_name, idx + len(self.hidden_fields)
             )
 
+    def _field_attrs(self):
+        # Hidden fields always come first
+        fields = [a for _, a in self.hidden_fields]
+        fields += [a for _, _, a in self.displayed_fields]
+        return fields
+
+    def _field_types(self):
+        types = [t for t, _ in self.hidden_fields]
+        types += [t for t, _, _ in self.displayed_fields]
+        return types
+
+    def _field_display_names(self):
+        return [n for _, n, _ in self.displayed_fields]
+
     def append(self, song):
-        attrs = [a for _, a in self.hidden_fields]
-        attrs += [a for _, _, a in self.shown_fields]
+        attrs = self._field_attrs()
         row_data = [getattr(song, a) for a in attrs]
         self._list_store.append(row_data)
+        self._songs[song.id] = song
 
-    def connect(self, event_type, callback):
-        self._callbacks[event_type] = callback
+    def on_double_click(self, callback):
+        self._callbacks['double-click'] = callback
 
     def _on_cell_clicked(self, treeview, event):
         try:
-            callback = self._callbacks['double-clicked']
+            callback = self._callbacks['double-click']
         except KeyError:
             pass
         else:
             if event.type == Gdk.EventType._2BUTTON_PRESS:
-                path, _, _, _ = song_list.get_path_at_pos(event.x, event.y)
-                song_id = song_list.get_model()[path][0]
-                logger.info('Song selected: %r' % song_id)
+                path, _, _, _ = treeview.get_path_at_pos(event.x, event.y)
+                song_id = treeview.get_model()[path][0]
+                callback(self._songs[song_id])
 
 
 class MusicActionBar(Gtk.ActionBar):
@@ -88,10 +111,9 @@ class ApplicationWindow(Gtk.ApplicationWindow):
         self.player = media.Player()
 
         self.song_list = SongListView()
-        self.song_list.connect('double-clicked', self.on_song_double_clicked)
+        self.song_list.on_double_click(self.on_song_double_clicked)
 
         scrolled = Gtk.ScrolledWindow()
-        # FIXME
         scrolled.add(self.song_list)
 
         actionbar = MusicActionBar()
@@ -110,9 +132,6 @@ class ApplicationWindow(Gtk.ApplicationWindow):
         songs = self.thread_pool.submit(api.fetch_songs)
         songs.add_done_callback(self.on_ready_callback)
 
-    def on_song_double_clicked(self, song):
-        self.player.skip_to(song)
-
     def on_play_clicked(self, button):
         logger.debug('Play button clicked')
         self.player.play()
@@ -124,6 +143,10 @@ class ApplicationWindow(Gtk.ApplicationWindow):
     def on_prev_clicked(self, button):
         logger.debug('Previous button pressed')
         self.player.previous_track()
+
+    def on_song_double_clicked(self, song):
+        logger.debug('Playing song: %r' % repr(song))
+        self.player.jump_to(song)
 
     def on_ready_callback(self, future):
         try:
