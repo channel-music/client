@@ -1,4 +1,4 @@
-from gi.repository import Gtk
+from gi.repository import Gtk, Gdk
 
 
 def add_treeview_column(treeview, text, index=0):
