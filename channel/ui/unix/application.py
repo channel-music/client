@@ -6,6 +6,7 @@ from gi.repository import Gdk, Gtk, GLib, Gio
 
 from channel import api, media
 from channel.ui.unix.song_list_view import SongListView
+from channel.ui.unix.threading import GLibThreadPoolExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -134,3 +135,9 @@ class Application(Gtk.Application):
 
     def on_quit(self, action, param):
         self.quit()
+
+
+def start_app(argv, max_workers=5):
+    with GLibThreadPoolExecutor(max_workers=max_workers) as pool:
+        app = Application(thread_pool=pool)
+        app.run(argv)
