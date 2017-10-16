@@ -22,12 +22,6 @@ def init_gstreamer():
     logger.debug('GStreamer version: %s' % gstreamer_version_str())
 
 
-class PlayerState(enum.Enum):
-    PLAYING = 1
-    STOPPED = 2
-    PAUSED = 3
-
-
 class Player:
     def __init__(self, looping=False):
         """An abstraction over playing music allowing standard music player
@@ -35,9 +29,9 @@ class Player:
 
         looping: True if tracks should loop after exhausted, defaults to False
         """
-        self._current_state = PlayerState.STOPPED
         self._play_queue = pq.PlayQueue()
         self.looping = looping
+
 
         # Initialize Gstreamer
         init_gstreamer()
@@ -103,13 +97,10 @@ class Player:
         An `AssertionError` will be thrown if the player is already
         playing.
         """
-        assert self._current_state is not PlayerState.PLAYING
+        assert self._player.get_state is not Gst.State.PLAYING
 
-        # TODO: Actually do something...
         self._player.set_property('uri', self._play_queue.current.file)
         self._player.set_state(Gst.State.PLAYING)
-
-        self._current_state = PlayerState.PLAYING
 
     def stop(self):
         """Stop playback of the current song.
@@ -117,7 +108,6 @@ class Player:
         This will work even if the player is currently paused or stopped.
         """
         self._player.set_state(Gst.State.NULL)
-        self._current_state = PlayerState.STOPPED
 
     def pause(self):
         """Pause playback of the current song.
@@ -127,7 +117,6 @@ class Player:
         paused or stopped.
         """
         self._player.set_state(Gst.State.PAUSED)
-        self._current_state = PlayerState.PAUSED
 
     def jump_to(self, song):
         """Jump player to a given song.
@@ -141,5 +130,5 @@ class Player:
         self.play()
 
     def _ensure_stopped(self):
-        if self._current_state is PlayerState.PLAYING:
+        if self._player.get_state() is Gst.State.PLAYING:
             self.stop()
