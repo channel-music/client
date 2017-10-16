@@ -55,10 +55,16 @@ class Player:
             logger.error('GStreamer Bus Error: %s - %s' % (err, debug))
 
     def _on_finished(self, player):
-        # TODO: find out if there's a way to get gstreamer
-        # TODO: to queue items
-        logger.debug('Media player finished')
-        self.next_track()
+        self._queue_next()
+
+    def _queue_next(self):
+        try:
+            self._play_queue.next()
+        except pq.Exhausted:
+            if not self.looping:
+                return
+            self._play_queue.reset()
+        self._player.set_property('uri', self._play_queue.current.file)
 
     def queue(self, song):
         """Add a song on to the end of the play queue."""
@@ -72,13 +78,7 @@ class Player:
         again from the beginning.
         """
         self._ensure_stopped()
-
-        try:
-            self._play_queue.next()
-        except pq.Exhausted:
-            if not self.looping:
-                return
-            self._play_queue.reset()
+        self._queue_next()
         self.play()
 
     # FIXME: don't go to previous song after N seconds
