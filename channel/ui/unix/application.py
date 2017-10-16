@@ -1,4 +1,5 @@
 import logging
+import signal
 
 import gi
 gi.require_version('Gtk', '3.0')  # noqa
@@ -138,6 +139,8 @@ class Application(Gtk.Application):
 
 
 def start_app(argv, max_workers=5):
+    # Close on keyboard interrupt
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
     with GLibThreadPoolExecutor(max_workers=max_workers) as pool:
         app = Application(thread_pool=pool)
         app.run(argv)
