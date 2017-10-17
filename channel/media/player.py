@@ -6,7 +6,7 @@ gi.require_version('Gst', '1.0')  # noqa
 from gi.repository import Gst, GLib
 
 from channel.media import play_queue as pq
-from channel.media.gst.streamer import AudioStreamer, StreamState
+from channel.media.stream import AudioStreamer, StreamState
 
 logger = logging.getLogger(__name__)
 
