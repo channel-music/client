@@ -4,25 +4,27 @@ jobs:
     working_directory: ~/client
     docker:
       - image: circleci/python:3.5.4
-  steps:
-    - checkout
-    - restore_cache:
-        key: channel-{{ .Branch }}-{{ checksum "test-requirements.txt" }}
-    - run:
-        name: Install pip dependencies
-        command: |
-          python3 -m venv venv
-          . venv/bin/activate
-          pip install -r test-requirements.txt
-    - save_cache:
-        key: channel-{{ .Branch }}-{{ checksum "test-requirements.txt" }}
-        paths:
-          - "venv"
-    - run:
-      name: Run tests
-      command: |
-        . venv/bin/activate
-        python manage.py test
-    - store_artifacts:
-        path: test-reports/
-        destination: tr1
+    steps:
+      - checkout
+      - run:
+          name: Install system dependencies
+          command: |
+            sudo apt-get update && sudo apt-get install \
+              gir1.2-gtk-3.0 python3-gi python-gobject-dev
+      - restore_cache:
+          key: channel-{{ .Branch }}-{{ checksum "test-requirements.txt" }}
+      - run:
+          name: Install pip dependencies
+          command: |
+            sudo pip3 install -r test-requirements.txt
+      - save_cache:
+          key: channel-{{ .Branch }}-{{ checksum "test-requirements.txt" }}
+          paths:
+            - "venv"
+      - run:
+          name: Run tests
+          command: |
+            python3 setup.py test
+      - store_artifacts:
+          path: test-reports/
+          destination: tr1
