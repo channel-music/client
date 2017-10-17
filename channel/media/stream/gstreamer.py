@@ -5,6 +5,8 @@ import gi
 gi.require_version('Gst', '1.0')  # noqa
 from gi.repository import Gst
 
+from channel.media.stream.common import StreamState
+
 
 logger = logging.getLogger(__name__)
 
@@ -21,23 +23,17 @@ def init_gstreamer():
     logger.debug('GStreamer version: %s' % gstreamer_version_str())
 
 
-class StreamState(enum.Enum):
-    PLAYING = 0
-    PAUSED = 1
-    STOPPED = 2
-
-    @classmethod
-    def from_gst_state(cls, gst_state):
-        conversions = {
-            Gst.State.PLAYING: cls.PLAYING,
-            Gst.State.PAUSED: cls.PAUSED,
-            Gst.State.NULL: cls.STOPPED,
-        }
-        _, current_state, _ = gst_state
-        try:
-            return conversions[current_state]
-        except KeyError:
-            raise ValueError('Unsupported Gst.State: {}'.format(gst_state))
+def gst_state_to_stream_state(gst_state):
+    conversions = {
+        Gst.State.PLAYING: StreamState.PLAYING,
+        Gst.State.PAUSED: StreamState.PAUSED,
+        Gst.State.NULL: StreamState.STOPPED,
+    }
+    _, current_state, _ = gst_state
+    try:
+        return conversions[current_state]
+    except KeyError:
+        raise ValueError('Unsupported Gst.State: {}'.format(gst_state))
 
 
 class AudioStreamer:
@@ -58,7 +54,7 @@ class AudioStreamer:
     def state(self):
         """Return the current state of the streamer as a `StreamState` enum."""
         gst_state = self._playbin.get_state(Gst.CLOCK_TIME_NONE)
-        return StreamState.from_gst_state(gst_state)
+        return gst_state_to_stream_state(gst_state)
 
     def _on_bus_message(self, bus, message):
         if message.type == Gst.Message.EOS:
