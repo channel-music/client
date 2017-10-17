@@ -32,7 +32,7 @@ class ApplicationWindow(Gtk.ApplicationWindow):
         super().__init__(**kwargs)
         self.thread_pool = thread_pool
         self.player = media.Player()
-        self.player.on_song_progress(self.on_player_song_progress)
+        GLib.timeout_add(250, self.update_progress)
 
         self.song_list = SongListView()
         self.song_list.on_double_click(self.on_song_list_double_clicked)
@@ -74,8 +74,10 @@ class ApplicationWindow(Gtk.ApplicationWindow):
     def on_prev_clicked(self, button):
         self.player.previous_track()
 
-    def on_player_song_progress(self, player, position):
-        logger.debug('Song position: %f' % position)
+    def update_progress(self):
+        if self.player.is_playing:
+            logger.debug('Song progress: %g' % self.player.position)
+        return True  # reschedule
 
     def on_song_list_double_clicked(self, song):
         logger.debug('Adding song to play list: %r' % repr(song))
