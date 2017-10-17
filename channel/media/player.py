@@ -1,9 +1,10 @@
 import enum
+import functools
 import logging
 
 import gi
 gi.require_version('Gst', '1.0')  # noqa
-from gi.repository import Gst
+from gi.repository import Gst, GLib
 
 from channel.media import play_queue as pq
 
@@ -22,6 +23,7 @@ def init_gstreamer():
     logger.debug('GStreamer version: %s' % gstreamer_version_str())
 
 
+
 class Player:
     def __init__(self, looping=False):
         """An abstraction over playing music allowing standard music player
@@ -29,8 +31,8 @@ class Player:
 
         looping: True if tracks should loop after exhausted, defaults to False
         """
+        self.is_looping = looping
         self._play_queue = pq.PlayQueue()
-        self.looping = looping
 
 
         # Initialize Gstreamer
@@ -38,6 +40,21 @@ class Player:
         self._player = Gst.ElementFactory.make('playbin', 'player')
         self._player.connect('about-to-finish', self._on_finished)
         self._player.bus.connect('message', self._on_bus_message)
+
+    def on_song_progress(self, callback):
+        """Accept a callback to be called when a song progresses.
+
+        The callback will only be called when the song is actually playing,
+        not when it is stopped or paused.
+        """
+        @functools.wraps(callback)
+        def wrapper():
+            if self.is_playing:
+                callback(self, self.position)
+            return True
+        # TODO: handle removal and rescheduling
+        # FIXME: abstract away Gtk stuff
+        GLib.timeout_add(250, wrapper)
 
     def _on_bus_message(self, bus, message):
         if message.type == Gst.Message.EOS:
@@ -55,7 +72,7 @@ class Player:
         try:
             self._play_queue.next()
         except pq.Exhausted:
-            if not self.looping:
+            if not self.is_looping:
                 return
             self._play_queue.reset()
         self._player.set_property('uri', self._play_queue.current.file)
@@ -63,6 +80,15 @@ class Player:
     def queue(self, song):
         """Add a song on to the end of the play queue."""
         self._play_queue.append(song)
+
+    @property
+    def is_playing(self):
+        return self._player.get_state() == Gst.State.PLAYING
+
+    @property
+    def current_track(self):
+        """Return the current playing track."""
+        return self._play_queue.current
 
     def next_track(self):
         """Stop the current song and play the next one in the queue.
@@ -124,7 +150,6 @@ class Player:
         Will stop the current song and move to the new one. The play queue will
         be reorganized.
         """
-        # FIXME: handle failures
         self.stop()
         self._play_queue.jump_to(song)
         self.play()
@@ -132,3 +157,28 @@ class Player:
     def _ensure_stopped(self):
         if self._player.get_state() is Gst.State.PLAYING:
             self.stop()
+
+    @property
+    def position(self):
+        """Return the current track position as a percentage of current position over
+        the total duration."""
+        _, current_time = self._player.query_position(Gst.Format.TIME)
+        _, duration = self._player.query_duration(Gst.Format.TIME)
+        try:
+            return current_time / duration
+        except ZeroDivisionError:
+            return 0
+
+    @position.setter
+    def position(self, value):
+        """Set the position of the current track as a pecentage of position over
+        total duration."""
+        _, duration = self._player.query_duration(Gst.Format.Time)
+        position = duration * value
+        assert position <= 1.0
+
+        self._player.seek_simple(
+            Gst.Format.PERCENT,
+            Gst.SeekFlags.KEY_UNIT,
+            position
+        )

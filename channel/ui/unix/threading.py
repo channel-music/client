@@ -1,5 +1,7 @@
 import concurrent.futures
 
+from gi.repository import GLib
+
 
 class GLibThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor):
     """Thread pool executor that adds done callbacks on to the Gtk
