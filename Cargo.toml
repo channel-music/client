@@ -1,0 +1,14 @@
+[package]
+name = "channel"
+version = "0.1.0"
+authors = ["Antonis Kalou <kalouantonis@protonmail.com>"]
+
+[dependencies]
+rand = "0.3"
+
+glib = "0.3.0"
+gstreamer = "0.8.1"
+
+[dependencies.gtk]
+version = "0.2.0"
+features = ["v3_10"]
