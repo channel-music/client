@@ -11,9 +11,16 @@ jobs:
           name: Install system dependencies
           command: |
             apt-get update && apt-get install -y libgstreamer1.0-dev libgtk-3-dev
+      - restore_cache:
+          # FIXME: use .lock or .toml?
+          key: channel-{{ .Branch }}-{{ checksum "Cargo.toml" }}
       - run:
           name: Install dependencies
-          command: cargo install
+          command: cargo build
+      - save_cache:
+          key: channel-{{ .Branch }}-{{ checksum "Cargo.toml" }}
+          paths:
+            - "~/.cargo"
       - run:
           name: Run tests
           command: cargo test
