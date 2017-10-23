@@ -18,6 +18,9 @@ fn main() {
     println!("Initializing audio subsystem...");
     media::init_audio_subsystem().unwrap();
 
+    println!("Creating audio player...");
+    let _player = media::Player::new(false);
+
     let window = Window::new(WindowType::Toplevel);
     window.set_title("Channel");
     window.set_default_size(350, 70);

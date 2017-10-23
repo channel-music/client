@@ -13,6 +13,7 @@ impl<T: PartialEq + Clone> PlayQueue<T> {
         PlayQueue::from_vec(vec![])
     }
 
+    /// Create a new play queue using the items from vector `items`.
     pub fn from_vec(items: Vec<T>) -> PlayQueue<T> {
         PlayQueue {
             items: items,
@@ -90,7 +91,7 @@ impl<T: PartialEq + Clone> PlayQueue<T> {
                 items.append(&mut shuffled_items);
                 items
             },
-            None    => shuffled_items
+            None => shuffled_items
         };
         self.index = 0;
     }
