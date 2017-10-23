@@ -9,10 +9,14 @@ use gtk::prelude::*;
 use gtk::{Button, Window, WindowType};
 
 fn main() {
+    println!("Initializing GTK+...");
     if gtk::init().is_err() {
         println!("Failed to intialize GTK.");
         return;
     }
+
+    println!("Initializing audio subsystem...");
+    media::init_audio_subsystem().unwrap();
 
     let window = Window::new(WindowType::Toplevel);
     window.set_title("Channel");
