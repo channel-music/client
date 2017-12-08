@@ -8,7 +8,7 @@ use gstreamer::prelude::*;
 
 use self::play_queue::PlayQueue;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct Track {
     id: u64,
     track: u8,
@@ -114,9 +114,9 @@ pub struct Player {
 }
 
 impl Player {
-    pub fn new(is_looping: bool) -> Player {
+    pub fn new() -> Player {
         Player {
-            is_looping: is_looping,
+            is_looping: false,
             play_queue: PlayQueue::new(),
             streamer: AudioStreamer::new(),
         }

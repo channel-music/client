@@ -1,14 +1,27 @@
 extern crate rand;
+// GTK
 extern crate glib;
 extern crate gtk;
 extern crate gstreamer;
+// JSON
+extern crate serde;
+extern crate serde_json;
+#[macro_use]
+extern crate serde_derive;
+// HTTP
+extern crate reqwest;
 
+mod api;
 mod media;
 
 use gtk::prelude::*;
 use gtk::{Button, Window, WindowType};
 
 fn main() {
+    println!("Fetching tracks...");
+    let tracks = api::fetch_tracks();
+    println!("Tracks: {:?}", tracks);
+
     println!("Initializing GTK+...");
     if gtk::init().is_err() {
         println!("Failed to intialize GTK.");
@@ -19,7 +32,10 @@ fn main() {
     media::init_audio_subsystem().unwrap();
 
     println!("Creating audio player...");
-    let _player = media::Player::new(false);
+    let mut player = media::Player::new();
+
+    println!("Queuing tracks in audio player...");
+    for t in tracks { player.queue(&t); }
 
     let window = Window::new(WindowType::Toplevel);
     window.set_title("Channel");
@@ -34,8 +50,8 @@ fn main() {
         Inhibit(false)
     });
 
-    button.connect_clicked(|_| {
-        println!("Clicked!");
+    button.connect_clicked(move |_| {
+        player.play();
     });
 
     gtk::main();

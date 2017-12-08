@@ -5,9 +5,15 @@ authors = ["Antonis Kalou <kalouantonis@protonmail.com>"]
 
 [dependencies]
 rand = "0.3"
-
+# GTK
 glib = "0.3.0"
 gstreamer = "0.8.1"
+# JSON
+serde = "1.0"
+serde_json = "1.0"
+serde_derive = "1.0"
+# HTTP
+reqwest = "0.8.1"
 
 [dependencies.gtk]
 version = "0.2.0"
