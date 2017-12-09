@@ -65,14 +65,16 @@ impl From<gst::State> for StreamState {
 
 /// Internal audio streamer. Can stream audio from remote or local
 /// files.
+#[derive(Clone)]
 struct AudioStreamer {
-    playbin: gst::Element,
+    // TODO: ensure that this memory isn't copied
+    playbin: Box<gst::Element>,
 }
 
 impl AudioStreamer {
     fn new() -> AudioStreamer {
         AudioStreamer {
-            playbin: gst::ElementFactory::make("playbin", None).unwrap()
+            playbin: Box::new(gst::ElementFactory::make("playbin", None).unwrap())
         }
     }
 
@@ -106,6 +108,7 @@ impl Streamable for AudioStreamer {
     }
 }
 
+#[derive(Clone)]
 pub struct Player {
     pub is_looping: bool,
     play_queue: PlayQueue<Track>,
@@ -151,6 +154,17 @@ impl Player {
             self.streamer.queue(track.file.clone());
             self.streamer.start();
         }
+    }
+
+    /// Pause playback of the current track. Will do nothing if
+    /// there is no current track.
+    ///
+    /// Pausing keeps the previous location of the audio stream.
+    ///
+    /// Will panic if the player is already paused.
+    pub fn pause(&self) {
+        assert!(self.streamer.state() != StreamState::Paused);
+        self.streamer.pause();
     }
 
     /// Stop playback of the current track.

@@ -1,6 +1,8 @@
 use rand;
 use rand::Rng;
 
+// TODO: ensure this does what I expect
+#[derive(Clone)]
 pub struct PlayQueue<T> {
     items: Vec<T>,
     index: usize,
