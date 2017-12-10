@@ -1,6 +1,8 @@
 mod play_queue;
 
 use std::error::Error;
+use std::sync::mpsc;
+use std::thread;
 
 use glib;
 use gstreamer as gst;
@@ -203,4 +205,47 @@ impl Player {
         self.play_queue.previous();
         self.play();
     }
+}
+
+#[derive(Debug)]
+pub enum PlayerCommand {
+    Queue(Track),
+    Play,
+    Pause,
+    Stop,
+    Previous,
+    Next,
+    Kill,
+}
+
+pub type PlayerSender = mpsc::Sender<PlayerCommand>;
+
+pub fn start_player(player: Player) -> PlayerSender {
+    let (tx, rx) = mpsc::channel();
+
+    let mut player = player;
+
+    // Add runner in to glib event loop
+    glib::idle_add(move || {
+        let mut should_continue = true;
+
+        if let Ok(cmd) = rx.try_recv() {
+            trace!("Running player command: {:?}", cmd);
+            // TODO: handle errors
+            use self::PlayerCommand::*;
+            match cmd {
+                Queue(ref track) => player.queue(track),
+                Play  => player.play(),
+                Pause => player.pause(),
+                Stop  => player.stop(),
+                Next  => player.next_track(),
+                Previous => player.previous_track(),
+                Kill => should_continue = false,
+            }
+        }
+
+        glib::Continue(should_continue)
+    });
+
+    tx
 }
