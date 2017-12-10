@@ -118,7 +118,29 @@ pub struct Player {
     streamer: AudioStreamer,
 }
 
+/// A command to be passed to the media player.
+#[derive(Debug)]
+pub enum PlayerCommand {
+    /// Put a track in to the play queue
+    Queue(Track),
+    /// Start audio playback
+    Play,
+    /// Pause audio playback, keeping the track position.
+    Pause,
+    /// Stop audio playback, resetting track position.
+    Stop,
+    /// Move to the next track in the queue.
+    Next,
+    /// Move to the previous track in the queue.
+    Previous,
+    /// Kill the audio player.
+    Kill,
+}
+
+pub type PlayerSender = mpsc::Sender<PlayerCommand>;
+
 impl Player {
+    /// Create a new audio player with no queued tracks.
     pub fn new() -> Player {
         Player {
             is_looping: false,
@@ -127,28 +149,58 @@ impl Player {
         }
     }
 
+    /// Create an event listener that receives messages over
+    /// a channel and performs the relevant command.
+    pub fn event_listener(mut self) -> PlayerSender {
+        let (tx, rx) = mpsc::channel();
+
+        // Add runner in to glib event loop
+        glib::idle_add(move || {
+            let mut should_continue = true;
+
+            if let Ok(cmd) = rx.try_recv() {
+                trace!("Running player command: {:?}", cmd);
+                // TODO: handle errors
+                use self::PlayerCommand::*;
+                match cmd {
+                    Queue(ref track) => self.queue(track),
+                    Play  => self.play(),
+                    Pause => self.pause(),
+                    Stop  => self.stop(),
+                    Next  => self.next_track(),
+                    Previous => self.previous_track(),
+                    Kill => should_continue = false,
+                }
+            }
+
+            glib::Continue(should_continue)
+        });
+
+        tx
+    }
+
     /// Returns `true` if the player is currently streaming audio.
     ///
     /// WARNING: May block the UI thread.
-    pub fn is_playing(&self) -> bool {
+    fn is_playing(&self) -> bool {
         self.streamer.state() == StreamState::Playing
     }
 
     /// Returns the current track in the queue. May or may not
     /// be currently playing.
-    pub fn current_track(&self) -> Option<&Track> {
+    fn current_track(&self) -> Option<&Track> {
         self.play_queue.current()
     }
 
     /// Add a track to the end of the play queue.
-    pub fn queue(&mut self, track: &Track) {
+    fn queue(&mut self, track: &Track) {
         self.play_queue.append(track);
     }
 
     /// Begin playback of the current track.
     ///
     /// Will panic if the player is already playing.
-    pub fn play(&self) {
+    fn play(&self) {
         assert!(self.streamer.state() != StreamState::Playing);
 
         if let Some(track) = self.current_track() {
@@ -164,7 +216,7 @@ impl Player {
     /// Pausing keeps the previous location of the audio stream.
     ///
     /// Will panic if the player is already paused.
-    pub fn pause(&self) {
+    fn pause(&self) {
         assert!(self.streamer.state() != StreamState::Paused);
         self.streamer.pause();
     }
@@ -172,7 +224,7 @@ impl Player {
     /// Stop playback of the current track.
     ///
     /// Will do nothing if player is already stopped.
-    pub fn stop(&self) {
+    fn stop(&self) {
         if self.is_playing() {
             self.streamer.stop()
         }
@@ -182,7 +234,7 @@ impl Player {
     ///
     /// If there are no more items, the player will stop, unless `is_looping`
     /// is set to true, in which case it will start again from the beginning.
-    pub fn next_track(&mut self) {
+    fn next_track(&mut self) {
         self.stop();
 
         if self.play_queue.next().is_none() {
@@ -200,52 +252,9 @@ impl Player {
     ///
     /// If there are no more previous items the track will be started
     /// from the beginning.
-    pub fn previous_track(&mut self) {
+    fn previous_track(&mut self) {
         self.stop();
         self.play_queue.previous();
         self.play();
     }
-}
-
-#[derive(Debug)]
-pub enum PlayerCommand {
-    Queue(Track),
-    Play,
-    Pause,
-    Stop,
-    Previous,
-    Next,
-    Kill,
-}
-
-pub type PlayerSender = mpsc::Sender<PlayerCommand>;
-
-pub fn start_player(player: Player) -> PlayerSender {
-    let (tx, rx) = mpsc::channel();
-
-    let mut player = player;
-
-    // Add runner in to glib event loop
-    glib::idle_add(move || {
-        let mut should_continue = true;
-
-        if let Ok(cmd) = rx.try_recv() {
-            trace!("Running player command: {:?}", cmd);
-            // TODO: handle errors
-            use self::PlayerCommand::*;
-            match cmd {
-                Queue(ref track) => player.queue(track),
-                Play  => player.play(),
-                Pause => player.pause(),
-                Stop  => player.stop(),
-                Next  => player.next_track(),
-                Previous => player.previous_track(),
-                Kill => should_continue = false,
-            }
-        }
-
-        glib::Continue(should_continue)
-    });
-
-    tx
 }

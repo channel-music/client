@@ -40,7 +40,7 @@ impl Application {
 
         Application {
             gtk: application,
-            player: media::start_player(player),
+            player: player.event_listener(),
         }
     }
 }
