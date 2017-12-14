@@ -1,9 +1,19 @@
+from concurrent.futures import ThreadPoolExecutor
 import logging
 import sys
 
+from channel import api, media
 from channel.ui import start_app
+
+def load_songs(thread_pool):
+    return thread_pool.submit(api.fetch_songs).result()
 
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
-    start_app(sys.argv)
+
+    with ThreadPoolExecutor(max_workers=5) as thread_pool:
+        songs = load_songs(thread_pool)
+
+    player = media.Player()
+    start_app(sys.argv, {'player': player, 'songs': songs})

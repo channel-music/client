@@ -1,3 +1,4 @@
+from collections import namedtuple
 import functools
 import logging
 
@@ -9,6 +10,10 @@ from channel.media import play_queue as pq
 from channel.media.stream import AudioStreamer, StreamState
 
 logger = logging.getLogger(__name__)
+
+
+Song = namedtuple('Song', ('id', 'title', 'album', 'artist',
+                           'genre', 'track', 'file'))
 
 
 class Player:

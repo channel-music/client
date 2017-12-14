@@ -5,39 +5,71 @@ import gi
 gi.require_version('Gtk', '3.0')  # noqa
 from gi.repository import Gdk, Gtk, GLib, Gio
 
-from channel import api, media
+from channel import media
+from channel.ui.unix.helpers import builder_from_file
 from channel.ui.unix.song_list_view import SongListView
-from channel.ui.unix.threading import GLibThreadPoolExecutor
 
 logger = logging.getLogger(__name__)
 
 
-class MusicActionBar(Gtk.ActionBar):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+@builder_from_file('data/ui/player_action_bar.ui')
+class PlayerActionBar(Gtk.ActionBar):
+    def __init__(self, player):
+        super().__init__()
+        # TODO: don't use pooling, use events
+        GLib.timeout_add(250, self._update_progress)
 
-        self.prev_button = Gtk.Button.new_from_stock(Gtk.STOCK_MEDIA_PREVIOUS)
-        self.play_button = Gtk.Button.new_from_stock(Gtk.STOCK_MEDIA_PLAY)
-        self.next_button = Gtk.Button.new_from_stock(Gtk.STOCK_MEDIA_NEXT)
-        self.progress_bar = Gtk.ProgressBar()
+        self.player = player
 
-        self.pack_start(self.prev_button)
-        self.pack_start(self.play_button)
-        self.pack_start(self.next_button)
-        self.pack_start(self.progress_bar)
+        self.previous_button = self.builder.get_object('previous_button')
+        self.play_button = self.builder.get_object('play_button')
+        self.next_button = self.builder.get_object('next_button')
+
+        self.previous_button.connect('clicked', self._on_previous_clicked)
+        self.play_button.connect('clicked', self._on_play_clicked)
+        self.next_button.connect('clicked', self._on_next_clicked)
+
+        self.progress_bar = self.builder.get_object('progress_bar')
+
+        self.add(self.builder.get_object('player_action_bar'))
+
+    def _on_previous_clicked(self, button):
+        self.player.previous_track()
+
+    def _on_play_clicked(self, button):
+        if self.player.is_playing:
+            self.player.pause()
+        else:
+            self.player.play()
+
+    def _on_next_clicked(self, button):
+        self.player.next_track()
+
+    def _update_progress(self):
+        if self.player.is_playing:
+            self.progress_bar.set_fraction(self.player.position)
+        return True  # reschedule
 
 
 class ApplicationWindow(Gtk.ApplicationWindow):
-    def __init__(self, thread_pool=None, **kwargs):
+    def __init__(self, player=None, songs=None, **kwargs):
         super().__init__(**kwargs)
-        self.thread_pool = thread_pool
-        self.player = media.Player()
-        GLib.timeout_add(250, self.update_progress)
+        self.player = player
 
         self.song_list = SongListView()
-        self.song_list.on_double_click(self.on_song_list_double_clicked)
+        self.song_list.connect(
+            'double-clicked',
+            self.on_song_list_double_clicked
+        )
         self.play_list = SongListView()
-        self.play_list.on_double_click(self.on_play_list_double_clicked)
+        self.play_list.connect(
+            'double-clicked',
+            self.on_play_list_double_clicked
+        )
+
+        for song_dict in songs.json():
+            song = media.Song(**song_dict)
+            self.song_list.append(song)
 
         song_list_scrolled = Gtk.ScrolledWindow()
         song_list_scrolled.add(self.song_list)
@@ -45,11 +77,7 @@ class ApplicationWindow(Gtk.ApplicationWindow):
         play_list_scrolled = Gtk.ScrolledWindow()
         play_list_scrolled.add(self.play_list)
 
-        actionbar = MusicActionBar()
-        actionbar.play_button.connect('clicked', self.on_play_clicked)
-        actionbar.next_button.connect('clicked', self.on_next_clicked)
-        actionbar.prev_button.connect('clicked', self.on_prev_clicked)
-
+        actionbar = PlayerActionBar(player)
         music_list_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         music_list_box.pack_start(song_list_scrolled, True, True, 0)
         music_list_box.pack_start(play_list_scrolled, True, True, 2)
@@ -60,26 +88,7 @@ class ApplicationWindow(Gtk.ApplicationWindow):
         box.pack_start(actionbar, False, True, 2)
         self.add(box)
 
-    def load_songs(self):
-        # Load songs
-        songs = self.thread_pool.submit(api.fetch_songs)
-        songs.add_done_callback(self.on_ready_callback)
-
-    def on_play_clicked(self, button):
-        self.player.play()
-
-    def on_next_clicked(self, button):
-        self.player.next_track()
-
-    def on_prev_clicked(self, button):
-        self.player.previous_track()
-
-    def update_progress(self):
-        if self.player.is_playing:
-            logger.debug('Song progress: %g' % self.player.position)
-        return True  # reschedule
-
-    def on_song_list_double_clicked(self, song):
+    def on_song_list_double_clicked(self, _, song):
         logger.debug('Adding song to play list: %r' % repr(song))
         self.player.queue(song)
         self.play_list.append(song)
@@ -88,24 +97,12 @@ class ApplicationWindow(Gtk.ApplicationWindow):
         logger.debug('Playing song: %r' % repr(song))
         self.player.jump_to(song)
 
-    def on_ready_callback(self, future):
-        try:
-            songs = future.result()
-        except Exception as e:
-            # FIXME: use specific exception
-            print('Something went wrong: {}'.format(e))
-        else:
-            for song_dict in songs.json():
-                song = media.Song(**song_dict)
-                self.song_list.append(song)
-
 
 class Application(Gtk.Application):
-    def __init__(self, thread_pool=None, **kwargs):
+    def __init__(self, **options):
         super().__init__(application_id='com.kalouantonis.channel',
-                         flags=Gio.ApplicationFlags.HANDLES_COMMAND_LINE,
-                         **kwargs)
-        self.thread_pool = thread_pool
+                         flags=Gio.ApplicationFlags.HANDLES_COMMAND_LINE)
+        self.options = options
         self.window = None
 
     def do_startup(self):
@@ -123,8 +120,7 @@ class Application(Gtk.Application):
         if not self.window:
             self.window = ApplicationWindow(application=self, title='Channel',
                                             default_width=1024, default_height=860,
-                                            thread_pool=self.thread_pool)
-            self.window.load_songs()  # TODO: move me
+                                            **self.options)
             self.window.show_all()
         self.window.present()
 
@@ -141,9 +137,8 @@ class Application(Gtk.Application):
         self.quit()
 
 
-def start_app(argv, max_workers=5):
+def start_app(argv, context):
     # Close on keyboard interrupt
     signal.signal(signal.SIGINT, signal.SIG_DFL)
-    with GLibThreadPoolExecutor(max_workers=max_workers) as pool:
-        app = Application(thread_pool=pool)
-        app.run(argv)
+    app = Application(**context)
+    app.run(argv)

@@ -1,5 +1,4 @@
-from channel.media.player import Player
-from channel.media.song import Song
+from channel.media.player import Player, Song
 
 
-__all__ = ['Song', 'Player']
+__all__ = ['Player', 'Song']

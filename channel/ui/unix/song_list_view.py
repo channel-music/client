@@ -1,4 +1,4 @@
-from gi.repository import Gtk, Gdk
+from gi.repository import Gtk, Gdk, GObject
 
 
 def add_treeview_column(treeview, text, index=0):
@@ -19,12 +19,14 @@ class SongListView(Gtk.TreeView):
         (int, 'id'),
     ]
 
-    def __init__(self):
+    __gsignals__ = {
+        'double-clicked': (GObject.SIGNAL_RUN_FIRST, None, (object,))
+    }
+
+    def __init__(self, songs = None):
         self._list_store = Gtk.ListStore(*self._field_types())
         super().__init__(model=self._list_store)
-        self._songs = {}
-        self._callbacks = {}
-
+        self._songs = songs or {}
         self.connect('button-press-event', self._on_cell_clicked)
 
         for idx, display_name in enumerate(self._field_display_names()):
@@ -52,20 +54,12 @@ class SongListView(Gtk.TreeView):
         self._list_store.append(row_data)
         self._songs[song.id] = song
 
-    def on_double_click(self, callback):
-        self._callbacks['double-click'] = callback
-
     def _on_cell_clicked(self, treeview, event):
-        try:
-            callback = self._callbacks['double-click']
-        except KeyError:
-            pass
-        else:
-            if event.type == Gdk.EventType._2BUTTON_PRESS:
-                try:
-                    path, _, _, _ = treeview.get_path_at_pos(event.x, event.y)
-                except TypeError:  # not iterable
-                    pass
-                else:
-                    song_id = treeview.get_model()[path][0]
-                    callback(self._songs[song_id])
+        if event.type == Gdk.EventType._2BUTTON_PRESS:
+            try:
+                path, _, _, _ = treeview.get_path_at_pos(event.x, event.y)
+            except TypeError:  # not iterable
+                pass
+            else:
+                song_id = treeview.get_model()[path][0]
+                self.emit('double-clicked', self._songs[song_id])

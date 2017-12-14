@@ -87,3 +87,4 @@ class PlayQueue:
         del shuffled_tracks[self._current_idx]
         random.shuffle(shuffled_tracks)
         self._tracks = [current_track] + shuffled_tracks
+        self._current_idx = 0
