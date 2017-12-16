@@ -7,7 +7,6 @@ class Exhausted(Exception):
     pass
 
 
-# TODO: implement a shuffle method
 class PlayQueue:
     def __init__(self, items=None):
         """A queue containing a set of items, allowing movement back and forth.

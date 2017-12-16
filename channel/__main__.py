@@ -6,7 +6,8 @@ from channel import api, media
 from channel.ui import start_app
 
 def load_songs(thread_pool):
-    return thread_pool.submit(api.fetch_songs).result()
+    songs = thread_pool.submit(api.fetch_songs).result()
+    return [media.Song(**s) for s in songs.json()]
 
 
 if __name__ == '__main__':

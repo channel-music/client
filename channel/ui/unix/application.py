@@ -3,52 +3,13 @@ import signal
 
 import gi
 gi.require_version('Gtk', '3.0')  # noqa
-from gi.repository import Gdk, Gtk, GLib, Gio
+from gi.repository import Gtk, Gio
 
 from channel import media
-from channel.ui.unix.helpers import builder_from_file
-from channel.ui.unix.song_list_view import SongListView
+from channel.ui.unix.components.player_action_bar import PlayerActionBar
+from channel.ui.unix.components.song_list_view import SongListView
 
 logger = logging.getLogger(__name__)
-
-
-@builder_from_file('data/ui/player_action_bar.ui')
-class PlayerActionBar(Gtk.ActionBar):
-    def __init__(self, player):
-        super().__init__()
-        # TODO: don't use pooling, use events
-        GLib.timeout_add(250, self._update_progress)
-
-        self.player = player
-
-        self.previous_button = self.builder.get_object('previous_button')
-        self.play_button = self.builder.get_object('play_button')
-        self.next_button = self.builder.get_object('next_button')
-
-        self.previous_button.connect('clicked', self._on_previous_clicked)
-        self.play_button.connect('clicked', self._on_play_clicked)
-        self.next_button.connect('clicked', self._on_next_clicked)
-
-        self.progress_bar = self.builder.get_object('progress_bar')
-
-        self.add(self.builder.get_object('player_action_bar'))
-
-    def _on_previous_clicked(self, button):
-        self.player.previous_track()
-
-    def _on_play_clicked(self, button):
-        if self.player.is_playing:
-            self.player.pause()
-        else:
-            self.player.play()
-
-    def _on_next_clicked(self, button):
-        self.player.next_track()
-
-    def _update_progress(self):
-        if self.player.is_playing:
-            self.progress_bar.set_fraction(self.player.position)
-        return True  # reschedule
 
 
 class ApplicationWindow(Gtk.ApplicationWindow):
@@ -67,8 +28,7 @@ class ApplicationWindow(Gtk.ApplicationWindow):
             self.on_play_list_double_clicked
         )
 
-        for song_dict in songs.json():
-            song = media.Song(**song_dict)
+        for song in songs:
             self.song_list.append(song)
 
         song_list_scrolled = Gtk.ScrolledWindow()
@@ -93,7 +53,7 @@ class ApplicationWindow(Gtk.ApplicationWindow):
         self.player.queue(song)
         self.play_list.append(song)
 
-    def on_play_list_double_clicked(self, song):
+    def on_play_list_double_clicked(self, _, song):
         logger.debug('Playing song: %r' % repr(song))
         self.player.jump_to(song)
 
