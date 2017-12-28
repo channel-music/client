@@ -1,8 +1,7 @@
 mod play_queue;
 
 use std::error::Error;
-use std::sync::mpsc;
-use std::thread;
+use std::sync;
 
 use glib;
 use gstreamer as gst;
@@ -37,6 +36,10 @@ enum StreamState {
     Stopped,
 }
 
+pub enum StreamEvent {
+    Completed,
+}
+
 /// Represents a behaviour that can be used to stream data of any type
 /// from a URI.
 trait Streamable {
@@ -50,6 +53,8 @@ trait Streamable {
     fn pause(&self);
     /// Return the state that the stream is currently in.
     fn state(&self) -> StreamState;
+    /// Return a receiver for stream events.
+    fn event_listener(&self) -> sync::mpsc::Receiver<StreamEvent>;
 }
 
 impl From<gst::State> for StreamState {
@@ -108,6 +113,19 @@ impl Streamable for AudioStreamer {
         let (_, current_state, _) = self.playbin.get_state(gst::CLOCK_TIME_NONE);
         StreamState::from(current_state)
     }
+
+    fn event_listener(&self) -> sync::mpsc::Receiver<StreamEvent> {
+        let (tx, rx) = sync::mpsc::channel();
+        let tx_mutex = sync::Mutex::new(tx);
+
+        self.playbin.connect("about-to-finish", false, move |_| {
+            let tx = tx_mutex.lock().unwrap();
+            tx.send(StreamEvent::Completed).unwrap();
+            None
+        }).unwrap();
+
+        rx
+    }
 }
 
 #[derive(Clone)]
@@ -137,7 +155,7 @@ pub enum PlayerCommand {
     Kill,
 }
 
-pub type PlayerSender = mpsc::Sender<PlayerCommand>;
+pub type PlayerSender = sync::mpsc::Sender<PlayerCommand>;
 
 impl Player {
     /// Create a new audio player with no queued tracks.
@@ -152,7 +170,7 @@ impl Player {
     /// Create an event listener that receives messages over
     /// a channel and performs the relevant command.
     pub fn event_listener(mut self) -> PlayerSender {
-        let (tx, rx) = mpsc::channel();
+        let (tx, rx) = sync::mpsc::channel();
 
         // Add runner in to glib event loop
         glib::idle_add(move || {
