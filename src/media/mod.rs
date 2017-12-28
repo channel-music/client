@@ -36,10 +36,6 @@ enum StreamState {
     Stopped,
 }
 
-pub enum StreamEvent {
-    Completed,
-}
-
 /// Represents a behaviour that can be used to stream data of any type
 /// from a URI.
 trait Streamable {
@@ -53,8 +49,9 @@ trait Streamable {
     fn pause(&self);
     /// Return the state that the stream is currently in.
     fn state(&self) -> StreamState;
-    /// Return a receiver for stream events.
-    fn event_listener(&self) -> sync::mpsc::Receiver<StreamEvent>;
+    /// Calls `callback` when the stream has completed.
+    fn on_stream_finished<F>(&self, callback: F)
+        where F: 'static + Fn() + Send + Sync;
 }
 
 impl From<gst::State> for StreamState {
@@ -114,17 +111,12 @@ impl Streamable for AudioStreamer {
         StreamState::from(current_state)
     }
 
-    fn event_listener(&self) -> sync::mpsc::Receiver<StreamEvent> {
-        let (tx, rx) = sync::mpsc::channel();
-        let tx_mutex = sync::Mutex::new(tx);
-
+    fn on_stream_finished<F>(&self, callback: F)
+        where F: 'static + Fn() + Send + Sync {
         self.playbin.connect("about-to-finish", false, move |_| {
-            let tx = tx_mutex.lock().unwrap();
-            tx.send(StreamEvent::Completed).unwrap();
+            callback();
             None
         }).unwrap();
-
-        rx
     }
 }
 
@@ -160,6 +152,8 @@ pub type PlayerSender = sync::mpsc::Sender<PlayerCommand>;
 impl Player {
     /// Create a new audio player with no queued tracks.
     pub fn new() -> Player {
+        let streamer = AudioStreamer::new();
+
         Player {
             is_looping: false,
             play_queue: PlayQueue::new(),
