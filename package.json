@@ -1,0 +1,17 @@
+{
+  "name": "channel",
+  "version": "0.1.0",
+  "description": "A self-hosted music streaming application",
+  "main": "main.js",
+  "scripts": {
+    "elm": "elm make src/Main.elm --output dist/elm.js || true",
+    "elm:watch": "chokidar 'src/**/*.elm' -c 'npm run elm'",
+    "start": "electron main.js",
+    "watch": "npm run start && npm run elm:watch && wait"
+  },
+  "author": "Antonis Kalou <kalouantonis@protonmail.com>",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "elm": "^0.18.0"
+  }
+}
