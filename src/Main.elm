@@ -1,6 +1,7 @@
+module Main exposing (main)
+
 import Html exposing (..)
 import Html.Events exposing (onClick)
-import Bootstrap.Button as Button
 import Bootstrap.Table as Table
 import Http
 import Json.Decode exposing (..)
@@ -30,7 +31,7 @@ init = (Model [] Player.empty, loadTracks)
 
 type Msg = TracksLoaded (Result Http.Error (List Track))
          | StreamError String
-         | PlayCurrent
+         | TogglePlaying
          | NextTrack
          | PreviousTrack
 
@@ -44,21 +45,21 @@ update msg model =
         TracksLoaded (Err _) ->
             (model, Cmd.none)
 
-        StreamError msg ->
-            Debug.log msg
+        StreamError err ->
+            Debug.log err
             (model, Cmd.none)
 
-        PlayCurrent ->
-            let (player, cmd) = Player.play model.player
-            in ({model | player = player}, cmd)
+        TogglePlaying ->
+            if Player.isPlaying model.player then
+                runAudio model Player.pause
+            else
+                runAudio model Player.play
 
         NextTrack ->
-            let (player, cmd) = Player.next model.player
-            in ({model | player = player}, cmd)
+            runAudio model Player.next
 
         PreviousTrack ->
-            let (player, cmd) = Player.previous model.player
-            in ({model | player = player}, cmd)
+            runAudio model Player.previous
 
 -- VIEW
 
@@ -66,7 +67,7 @@ view : Model -> Html Msg
 view model =
     div []
       [ viewTracks (List.sortBy .track model.tracks)
-      , viewPlayer ]
+      , viewPlayer model.player]
 
 viewTracks : List Track -> Html Msg
 viewTracks tracks =
@@ -87,11 +88,17 @@ viewTrack t =
       , Table.td [] [text t.album]
       , Table.td [] [text t.artist]]
 
-viewPlayer : Html Msg
-viewPlayer =
+viewPlayer : Player ->  Html Msg
+viewPlayer player =
     div []
      [ button [onClick PreviousTrack] [text "Previous"]
-     , button [onClick PlayCurrent] [text "Play"]
+     , button [onClick TogglePlaying]
+         [
+          if Player.isPlaying player then
+              text "Pause"
+          else
+              text "Play"
+         ]
      , button [onClick NextTrack] [text "Next"]]
 
 -- SUBSCRIPTIONS
@@ -109,6 +116,14 @@ loadTracks =
         request = Http.get "http://localhost:3000/songs" decodeTracks
     in
         Http.send TracksLoaded request
+
+-- TODO: monad
+runAudio : Model -> (Player -> (Player, Cmd msg)) -> (Model, Cmd msg)
+runAudio model audioFn =
+    let (player, cmd) = audioFn model.player
+    in ({model | player = player}, cmd)
+
+-- DECODERS
 
 decodeTrack : Decoder Track
 decodeTrack = map6 Track

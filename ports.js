@@ -14,7 +14,7 @@ channel.ports.open.subscribe(url => {
   audioStream.src = url
 
   audioStream.addEventListener('ended', () => (
-    channel.ports.onStreamFinished.send(url)
+    channel.ports.onStreamFinished.send()
   ))
 
   audioStream.addEventListener('error', err => (
