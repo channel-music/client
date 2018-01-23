@@ -1,6 +1,31 @@
-module Media.PlayQueue exposing (..)
+module Media.PlayQueue exposing
+    ( PlayQueue
+    , create
+    , empty
+    , items
+    , append
+    , current
+    , next
+    , previous
+    , reset
+    , jumpTo)
 
 import Array
+
+arrayIndexOf : a -> Array.Array a -> Maybe Int
+arrayIndexOf item arr =
+    let
+        indexOf arr index =
+            case arr of
+                [] ->
+                    Nothing
+                (x::xs) ->
+                    if item == x then
+                        Just index
+                    else
+                        indexOf xs (index + 1)
+    in
+        indexOf (Array.toList arr) 0
 
 type alias PlayQueue a =
     { index : Int
@@ -33,3 +58,11 @@ previous pq = {pq | index = pq.index - 1 }
 
 reset : PlayQueue a -> PlayQueue a
 reset pq = { pq | index = 0 }
+
+jumpTo : a -> PlayQueue a -> PlayQueue a
+jumpTo item pq =
+    case arrayIndexOf item pq.items of
+        Just itemIndex ->
+            {pq | index = itemIndex}
+        Nothing ->
+            pq

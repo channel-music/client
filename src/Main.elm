@@ -34,6 +34,7 @@ type Msg = TracksLoaded (Result Http.Error (List Track))
          | TogglePlaying
          | NextTrack
          | PreviousTrack
+         | JumpToTrack Track
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
@@ -61,6 +62,9 @@ update msg model =
         PreviousTrack ->
             runAudio model Player.previous
 
+        JumpToTrack track ->
+            runAudio model (Player.jumpTo track)
+
 -- VIEW
 
 view : Model -> Html Msg
@@ -76,7 +80,8 @@ viewTracks tracks =
              [ Table.th [] [ text "#" ]
              , Table.th [] [ text "Title" ]
              , Table.th [] [ text "Album" ]
-             , Table.th [] [ text "Artist" ]]
+             , Table.th [] [ text "Artist" ]
+             , Table.th [] [ ]]
         , Table.tbody []
             (List.map viewTrack tracks))
 
@@ -86,7 +91,12 @@ viewTrack t =
       [ Table.td [] [text (toString t.track)]
       , Table.td [] [text t.title]
       , Table.td [] [text t.album]
-      , Table.td [] [text t.artist]]
+      , Table.td [] [text t.artist]
+      , Table.td [] [viewTrackActions t] ]
+
+viewTrackActions : Track -> Html Msg
+viewTrackActions t =
+    button [onClick (JumpToTrack t)] [text "|>"]
 
 viewPlayer : Player ->  Html Msg
 viewPlayer player =

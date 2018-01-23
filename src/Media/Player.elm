@@ -7,6 +7,7 @@ module Media.Player exposing
     , pause
     , next
     , previous
+    , jumpTo
     , isPlaying)
 
 import Media.Audio as Audio
@@ -74,3 +75,6 @@ previous = moveTo PQ.previous
 
 isPlaying : Player -> Bool
 isPlaying { streamState } = streamState == Playing
+
+jumpTo : Track -> Player -> (Player, Cmd msg)
+jumpTo track = moveTo (PQ.jumpTo track)
