@@ -19,3 +19,8 @@ Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_do
 and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
 be found at [https://hexdocs.pm/channel](https://hexdocs.pm/channel).
 
+## License
+
+Licensed under Apache v2.0 to Antonis Kalou.  
+
+See the [license file](LICENSE) for details.
