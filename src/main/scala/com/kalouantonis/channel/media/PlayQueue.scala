@@ -1,4 +1,4 @@
-package kalouantonis.channel.media
+package com.kalouantonis.channel.media
 
 /**
   * An immutable PlayQueue data structure.

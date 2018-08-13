@@ -1,4 +1,4 @@
-package kalouantonis.channel
+package com.kalouantonis.channel.media
 
 import org.scalatest._
 

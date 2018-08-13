@@ -1,10 +1,10 @@
-package kalouantonis.channel.media
+package com.kalouantonis.channel.media
 
 import java.{io => jio}
-import javax.sound.sampled.{AudioFormat, AudioSystem, SourceDataLine}
+import javax.sound.sampled.{AudioFormat, AudioSystem, AudioInputStream, SourceDataLine}
 
 import cats.effect.{IO, Sync}
-import fs2.{Stream, Pipe, Chunk, Sink}
+import fs2.{Stream, Sink}
 
 object Audio {
   // FIXME: this is practically a duplicate of fs2.io.JavaInputOutputStream,
@@ -30,8 +30,11 @@ object Audio {
 
   import AudioStreamUtil._
 
-  def targetFormat(sourceFormat: AudioFormat): AudioFormat =
-    new AudioFormat(
+  def decoder[F[_]](
+    sourceAIS: AudioInputStream, bufSize: Int)(
+    implicit F: Sync[F]): (Stream[F, Byte], AudioFormat) = {
+    val sourceFormat = sourceAIS.getFormat
+    val targetFormat = new AudioFormat(
       AudioFormat.Encoding.PCM_SIGNED,
       sourceFormat.getSampleRate,
       16,
@@ -40,8 +43,16 @@ object Audio {
       sourceFormat.getSampleRate,
       false
     )
+    val decodedAIS: F[jio.InputStream] = F.delay(
+      AudioSystem.getAudioInputStream(targetFormat, sourceAIS))
 
-  def sourceDataLineSink(targetFormat: AudioFormat): Sink[IO, Byte] =
+    val stream = fs2.io.readInputStream[F](
+      decodedAIS, bufSize, closeAfterUse = true)
+
+    (stream, targetFormat)
+  }
+
+  def sourceDataLine(targetFormat: AudioFormat): Sink[IO, Byte] =
     writeSourceDataLine(
       IO {
         val line = AudioSystem.getSourceDataLine(targetFormat)
@@ -49,22 +60,4 @@ object Audio {
         line.start()
         line
       })
-
-  def mp3Decoder[F[_]](targetFormat: AudioFormat)(
-    implicit F: Sync[F]): Pipe[F, Byte, Byte] = {
-    def sinkByteChunk(byteChunk: Chunk[Byte])(
-      implicit F: Sync[F]): Stream[F, Byte] = {
-      // FIXME: How efficient is it to create these each time?
-      val byteIn = new jio.ByteArrayInputStream(byteChunk.toArray)
-      val sourceAIS = AudioSystem.getAudioInputStream(byteIn)
-      val decodedAIS = AudioSystem.getAudioInputStream(targetFormat, sourceAIS)
-
-      fs2.io.readInputStream(
-        F.delay(decodedAIS : jio.InputStream),
-        byteChunk.size,
-        closeAfterUse = true)
-    }
-
-    s => s.chunks flatMap sinkByteChunk
-  }
 }
