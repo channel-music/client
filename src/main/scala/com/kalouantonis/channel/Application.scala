@@ -3,29 +3,21 @@ package com.kalouantonis.channel
 import java.io.File
 import javax.sound.sampled.AudioSystem
 
-// FIXME: transient dependency
 import cats.effect.IO
 import com.kalouantonis.channel.media.{Audio, PlayQueue}
 
 object Player {
   case class Track(title: String, album: String, artist: String)
 
-  // FIXME: partial function
-  def audioStream(url: java.net.URL): fs2.Stream[IO, Unit] = {
-    val bufSize = 4096 // FIXME: is this dependant on format?
-    val inputStream = AudioSystem.getAudioInputStream(url)
-    val (decodedStream, decodedFormat) = Audio.decoder[IO](inputStream, bufSize)
-    // Fetch the audio output stream
-    val pcmOutputStream = Audio.sourceDataLine(decodedFormat)
+  // This is part of the player API
+  def playUntilComplete(filePath: String): IO[Unit] = {
+    val file = new File(filePath)
+    val tags = AudioSystem.getAudioFileFormat(file)
 
-    decodedStream.to(pcmOutputStream)
-  }
-
-  def playUntilFinish(filePath: String): IO[Unit] = {
-    val url = new File(filePath).toURI.toURL
-    audioStream(url)
-      .compile
-      .drain
+    for {
+      stream <- Audio.openStream(file.toURI.toURL)
+      // We're just running these streams unsafely for now
+    } yield stream.compile.drain.unsafeRunSync()
   }
 }
 
@@ -41,6 +33,6 @@ object Application {
 
     val filePath = args.headOption.getOrElse("song.mp3")
     println(s"Attempting to play song: $filePath")
-    Player.playUntilFinish(filePath).unsafeRunSync()
+    Player.playUntilComplete(filePath).unsafeRunSync()
   }
 }
