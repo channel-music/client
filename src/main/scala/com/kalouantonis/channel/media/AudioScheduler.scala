@@ -11,12 +11,24 @@ import com.kalouantonis.channel.concurrent.Channel
 
 import StreamScheduler.Command
 
+// NOTE
+// 2 appoaches could work here, we could either use shared state
+// concurrency, sharing the playQueue in a thread-safe manner and
+// only relay messages to the consumer, updating the state of the
+// play queue once a track is moved.
+//
+// Another approach is to use message passing style all around with a
+// duplex channel. Once a message is sent by the stream handler
+// (consumer as of now), the stream scheduler sends a message to a callback
+// within the caller context.
+
 // FIXME: should be COMPLETELY thread safe
 class StreamScheduler {
   import StreamScheduler._
 
   private implicit val ec: ExecutionContext =
-    ExecutionContext.fromExecutorService(Executors.newFixedThreadPool(2))
+    ExecutionContext.fromExecutorService(
+      Executors.newSingleThreadExecutor())
 
   private[this] val consumerChannel = new Channel[Command]
 
@@ -28,7 +40,9 @@ class StreamScheduler {
     consumerChannel.put(Play(url))
   }
 
-  // def resume(): Unit = {}
+  def resume(): Unit = {
+    consumerChannel.put(Resume)
+  }
 
   def pause(): Unit = {
     consumerChannel.put(Pause)
@@ -72,6 +86,7 @@ object StreamScheduler {
   sealed trait Command
   case class Play(url: java.net.URL) extends Command
   case object Pause extends Command
+  case object Resume extends Command
 
   class Consumer(commandChannel: Channel[Command]) extends Runnable {
     type Stream = (AudioInputStream, SourceDataLine)
@@ -104,6 +119,7 @@ object StreamScheduler {
 
           // if we have a message, reconsume it
           commandChannel.poll.foreach(consume)
+        case Resume =>
         case Pause =>
           // do nothing, will reconsume
       }
