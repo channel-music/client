@@ -55,7 +55,5 @@ object Application {
         album = "Test album",
         artist = "Test artist",
         url = file.toURI.toURL))
-    player.play()
-    player.pause()
   }
 }

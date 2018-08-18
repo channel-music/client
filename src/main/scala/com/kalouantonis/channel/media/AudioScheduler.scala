@@ -7,29 +7,31 @@ import javax.sound.sampled.{AudioSystem, AudioFormat, AudioInputStream, SourceDa
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Success, Failure}
 
+import com.kalouantonis.channel.concurrent.Channel
+
 import StreamScheduler.Command
 
+// FIXME: should be COMPLETELY thread safe
 class StreamScheduler {
   import StreamScheduler._
 
   private implicit val ec: ExecutionContext =
     ExecutionContext.fromExecutorService(Executors.newFixedThreadPool(2))
 
-  private[this] val consumerQueue: LinkedBlockingQueue[Command] =
-    new LinkedBlockingQueue()
+  private[this] val consumerChannel = new Channel[Command]
 
   def start(): Unit = {
-    ec.execute(new Consumer(consumerQueue))
+    ec.execute(new Consumer(consumerChannel))
   }
 
   def play(url: java.net.URL): Unit = {
-    consumerQueue.put(Play(url))
+    consumerChannel.put(Play(url))
   }
 
   // def resume(): Unit = {}
 
   def pause(): Unit = {
-    consumerQueue.put(Pause)
+    consumerChannel.put(Pause)
   }
 }
 
@@ -71,14 +73,14 @@ object StreamScheduler {
   case class Play(url: java.net.URL) extends Command
   case object Pause extends Command
 
-  class Consumer(queue: BlockingQueue[Command]) extends Runnable {
+  class Consumer(commandChannel: Channel[Command]) extends Runnable {
     type Stream = (AudioInputStream, SourceDataLine)
 
     private[this] val currentStream = new AtomicReference[Option[Stream]](None)
 
     override def run(): Unit = {
       while (true) {
-        val item = queue.take()
+        val item = commandChannel.get
         println(s"Received message: $item")
         consume(item)
       }
@@ -92,7 +94,7 @@ object StreamScheduler {
 
           val (in, out) = currentStream.get.get // get is safe here
 
-          while (queue.peek() == null) {
+          while (commandChannel.isEmpty) {
             readAudioStream(in, 4096) match {
               case Some(bytes) =>
                 writeToLine(out, bytes)
@@ -101,7 +103,7 @@ object StreamScheduler {
           }
 
           // if we have a message, reconsume it
-          Option(queue.poll()).foreach(consume)
+          commandChannel.poll.foreach(consume)
         case Pause =>
           // do nothing, will reconsume
       }
