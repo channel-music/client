@@ -1,38 +1,61 @@
 package com.kalouantonis.channel
 
-import java.io.File
-import javax.sound.sampled.AudioSystem
+import java.io.{ BufferedReader, File, InputStream, OutputStream }
+import java.util.concurrent.{Executors, LinkedBlockingQueue}
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 
 import cats.effect.IO
-import com.kalouantonis.channel.media.{Audio, PlayQueue}
+import javax.sound.sampled.{AudioSystem, AudioFormat, AudioInputStream, SourceDataLine}
+
+import scala.concurrent.{ExecutionContext, Future}
+import scala.util.control.NonFatal
+import com.kalouantonis.channel.media.{Audio, StreamScheduler, PlayQueue}
+
+case class Track(title: String, album: String, artist: String, url: java.net.URL)
+
+class Player(tracks: IndexedSeq[Track]) {
+  private[this] val playQueue = new AtomicReference(PlayQueue(tracks))
+
+  private[this] val scheduler = new StreamScheduler()
+
+  // FIXME: dont do this here
+  {
+    scheduler.start()
+  }
+
+  def queue(track: Track): Unit = {
+    playQueue.getAndUpdate(_ append track)
+  }
+
+  def play(): Unit =
+    playQueue.get
+      .current
+      .foreach(track => scheduler.play(track.url))
+
+  def pause(): Unit = {
+    scheduler.pause()
+  }
+}
 
 object Player {
-  case class Track(title: String, album: String, artist: String)
-
-  // This is part of the player API
-  def playUntilComplete(filePath: String): IO[Unit] = {
-    val file = new File(filePath)
-    val tags = AudioSystem.getAudioFileFormat(file)
-
-    for {
-      stream <- Audio.openStream(file.toURI.toURL)
-      // We're just running these streams unsafely for now
-    } yield stream.compile.drain.unsafeRunSync()
-  }
+  def apply(): Player = new Player(Vector.empty)
 }
 
 object Application {
   def main(args: Array[String]): Unit = {
-    val pq = PlayQueue(
-      Vector(
-        Player.Track("Black Sabbath", "Black Sabbath", "Black Sabbath"),
-        Player.Track("N.I.B", "Black Sabbath", "Black Sabbath")))
+    println("Welcome to channel 0.1!")
+    println("==> You can type :q at any time to quit")
 
-    println(s"Current item: ${pq.current}")
-    println(s"Next item: ${pq.next.current}")
-
-    val filePath = args.headOption.getOrElse("song.mp3")
-    println(s"Attempting to play song: $filePath")
-    Player.playUntilComplete(filePath).unsafeRunSync()
+    val path = args.headOption.getOrElse("song.mp3")
+    val file = new File(path)
+    val player = Player()
+    player.queue(
+      Track(
+        title = "Test track",
+        album = "Test album",
+        artist = "Test artist",
+        url = file.toURI.toURL))
+    player.play()
+    player.pause()
   }
 }

@@ -30,7 +30,7 @@ lazy val root = (project in file("."))
       // Tests
       "org.scalatest" %% "scalatest" % "3.0.5" % Test
     ),
-    wartremoverErrors ++= Warts.unsafe,
+    // wartremoverErrors ++= Warts.unsafe,
     // FIXME
     //
     // Fork must be enabled for run because the SPI's for sound

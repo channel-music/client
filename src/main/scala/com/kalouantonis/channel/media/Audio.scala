@@ -8,6 +8,8 @@ import fs2.{Chunk, Stream, Sink}
 // FIXME: clean up this whole module
 
 object Audio {
+  private[this] val BUFFER_SIZE = 4096
+
   /**
     * Represents a stream of IO resulting in audio being played.
     */
@@ -42,7 +44,7 @@ object Audio {
     fs2.io.readInputStream[IO](
       IO(AudioSystem.getAudioInputStream(targetFormat, inputStream)),
       // NOTE: I think 4096 left here is fine for now
-      4096, closeAfterUse = true)
+      BUFFER_SIZE, closeAfterUse = true)
 
 
   private[this] def pcmOutputStream(format: AudioFormat): Sink[IO, Byte] =
@@ -56,7 +58,8 @@ object Audio {
 
   private[this] def writeToSourceDataLine(fos: IO[SourceDataLine]): Sink[IO, Byte] = s => {
     def writeBytesToLine(os: SourceDataLine, bytes: Chunk[Byte]): IO[Unit] =
-      IO(os.write(bytes.toArray, 0, bytes.size))
+      // TODO: do something if not all the bytes aren't written
+      IO{ val _ = os.write(bytes.toArray, 0, bytes.size); ()}
 
     def sink(os: SourceDataLine): Stream[IO, Unit] =
       s.chunks.evalMap(writeBytesToLine(os, _))
