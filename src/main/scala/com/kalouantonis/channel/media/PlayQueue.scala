@@ -28,12 +28,25 @@ class PlayQueue[T] private(items: IndexedSeq[T], index: Int) {
   def next: PlayQueue[T] =
     new PlayQueue(items, index + 1)
 
+  def hasNext: Boolean =
+    index < items.length - 1
+
+  def hasPrevious: Boolean =
+    index > 0
+
   /**
     * Return a queue with the index shifted one item to the left.
     */
   def previous: PlayQueue[T] =
     // FIXME: how are we gonna handle OOB in scala?
     new PlayQueue(items, if (index == 0) index else index - 1)
+
+  def jumpTo(item: T): Option[PlayQueue[T]] =
+    items.indexOf(item) match {
+      case -1 => None
+      case idx => Option(new PlayQueue(items, idx))
+    }
+
 
   /**
     * Return true if the queue contains no items.
