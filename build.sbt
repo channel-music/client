@@ -27,6 +27,8 @@ lazy val root = (project in file("."))
       "com.googlecode.soundlibs" % "jlayer" % "1.0.1.4" % Runtime,
       "com.googlecode.soundlibs" % "mp3spi" % "1.9.5.4" % Runtime,
       "net.jthink" % "jaudiotagger" % "2.2.3",
+      // JavaFX
+      "org.scalafx" %% "scalafx" % "8.0.144-R12",
       // Tests
       "org.scalatest" %% "scalatest" % "3.0.5" % Test
     ),
