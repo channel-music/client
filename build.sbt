@@ -19,9 +19,8 @@ lazy val root = (project in file("."))
     libraryDependencies ++= Seq(
       // Stdlib
       "org.typelevel" %% "cats-core" % "1.1.0",
-      "org.typelevel" %% "cats-effect" % "0.10",
-      "co.fs2" %% "fs2-core" % fs2Version,
-      "co.fs2" %% "fs2-io" % fs2Version,
+      "org.typelevel" %% "cats-effect" % "1.0.0-RC3",
+      "io.monix" %% "monix" % "3.0.0-RC1",
       // Audio
       "com.googlecode.soundlibs" % "tritonus-share" % "0.3.7.4" % Runtime,
       "com.googlecode.soundlibs" % "jlayer" % "1.0.1.4" % Runtime,

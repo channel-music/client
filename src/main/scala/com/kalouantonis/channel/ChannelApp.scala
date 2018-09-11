@@ -1,202 +1,107 @@
 package com.kalouantonis.channel
 
-import scala.collection.mutable
+import java.io.File
 
-import javafx.scene.input.{MouseButton, MouseEvent}
-import scalafx.application.JFXApp
-import scalafx.beans.property.StringProperty
-import scalafx.collections.ObservableBuffer
-import scalafx.scene.Scene
-import scalafx.scene.media.{Media, MediaPlayer}
-import scalafx.scene.control.{TableView, TableColumn, TableRow}
-import scalafx.scene.layout.{HBox, Priority}
+import scala.collection.JavaConverters._
 
-import com.kalouantonis.channel.media.PlayQueue
-import org.jaudiotagger.audio.AudioFileIO
-import org.jaudiotagger.audio.exceptions.CannotReadException
-import org.jaudiotagger.tag.FieldKey
+import javafx.application.Application
+import javafx.beans.value.ObservableValue
+import javafx.beans.property.SimpleStringProperty
+import javafx.collections.FXCollections
+import javafx.stage.Stage
+import javafx.scene.{Parent, Scene}
+import javafx.scene.control.{Button, TableColumn, TableView, TableRow}
+import javafx.scene.input.MouseButton
+import javafx.scene.layout.{HBox, VBox}
 
-// FIXME: are these API's thread-safe?
-class Player(tracks: IndexedSeq[Track]) {
-  // FIXME: vars "everywhere"
-  private var playQueue: PlayQueue[Track] = PlayQueue(tracks)
-  private var currentStream: Option[MediaPlayer] = None
+import cats.effect.IO
+import com.kalouantonis.channel.media.Track
 
-  def queue(track: Track): Unit = {
-    playQueue = playQueue.append(track)
+object Views {
+  def trackListView(tracks: Seq[Track]): TableView[Track] = {
+    val table = new TableView[Track]()
+    table.getColumns.addAll(
+      column("Title", track => new SimpleStringProperty(track.title)),
+      column("Album", track => new SimpleStringProperty(track.album)),
+      column("Artist", track => new SimpleStringProperty(track.artist)))
+    table.setEditable(false)
+    table.setItems(FXCollections.observableArrayList(tracks.asJava))
+    table
   }
 
-  def play(): Unit = {
-    currentStream.foreach(_.stop())
-
-    playQueue.current.foreach { track =>
-      val media = new Media(track.uri.toString)
-      // FIXME: is this all completely thread safe?
-      val player = new MediaPlayer(media)
-      player.play()
-      player.onEndOfMedia = { next() }
-      currentStream = Some(player)
-    }
-  }
-
-  def pause(): Unit = {
-    currentStream.foreach(_.pause())
-  }
-
-  def next(): Unit = {
-    if (playQueue.hasNext) {
-      stop()
-      this.playQueue = playQueue.next
-      play()
-    }
-  }
-
-  def previous(): Unit = {
-    if (playQueue.hasPrevious) {
-      stop()
-      this.playQueue = playQueue.previous
-      play()
-    }
-  }
-
-  def stop(): Unit = {
-    currentStream.foreach(_.stop())
-  }
-
-  def jumpTo(track: Track): Boolean =
-    playQueue.jumpTo(track) map { playQueue =>
-      this.playQueue = playQueue
-      stop()
-      play()
-      true
-    } getOrElse false
-
-
-  def clear(): Unit = {
-    playQueue = PlayQueue.empty
-    currentStream = None
+  private def column[Item, T](
+      title: String,
+      valueFactory: Item => ObservableValue[T]
+  ): TableColumn[Item, T] = {
+    val col = new TableColumn[Item, T](title)
+    col.setCellValueFactory(cell => valueFactory(cell.getValue))
+    col
   }
 }
 
-// This is the Track used for UI state, not necessarily player state
-case class Track(
-    title: String,
-    album: String,
-    artist: String,
-    uri: java.net.URI
-)
+// NOTE
+//
+// No one until fucking JAVA 9!!!!! decided to allow starting
+// an application by passing it NORMAL parameters, so we use this
+// as the entry point.
+//
+// On the plus side, it makes lifecycle management a bit simpler in regards
+// to running on a generic "platform" (e.g. mobile or desktop).
+final class ChannelApp extends Application {
+  import ChannelApp._
 
-object Track {
-  def fromFile(file: java.io.File): Option[Track] = {
-    val tag =
-      try {
-        Some(AudioFileIO.read(file).getTag)
-      } catch {
-        case _: CannotReadException =>
-          None
+  var availableTracks: Seq[Track] = Seq(
+    Track("N.I.B", "Black Sabbath", "Black Sabbath", new File("song.mp3").toURI),
+    Track("Black Sabbath", "Black Sabbath", "Black Sabbath", new File("song.wav").toURI))
+  var queuedTracks: Seq[Track] = Seq()
+
+  // This is basically the new main, is there a pre-stage initialization part? more callbacks?
+  override def start(primaryStage: Stage): Unit = {
+    // TODO
+    val config = ChannelApp.loadConfig().unsafeRunSync()
+    val root = loadUI(primaryStage, config).unsafeRunSync()
+    primaryStage.setTitle(FullAppName)
+    primaryStage.setWidth(1260)
+    primaryStage.setHeight(860)
+    primaryStage.setScene(new Scene(root))
+    primaryStage.show()
+  }
+
+  def loadUI(primaryStage: Stage, config: Config): IO[Parent] = IO {
+    val availableListView = Views.trackListView(availableTracks)
+    availableListView.setRowFactory { _ =>
+      val row = new TableRow[Track]
+      row.setOnMouseClicked { ev =>
+        if (ev.getButton == MouseButton.PRIMARY && ev.getClickCount == 2) {
+          println(s"Double clicked: ${row.getItem}")
+        }
       }
+      row
+    }
 
-    tag.map(tag =>
-      Track(
-        title = Option(tag.getFirst(FieldKey.TITLE))
-          .filter(_.nonEmpty).getOrElse(file.getName),
-        album = Option(tag.getFirst(FieldKey.ALBUM))
-          .filter(_.nonEmpty).getOrElse("Unknown"),
-        artist = Option(tag.getFirst(FieldKey.ARTIST))
-          .filter(_.nonEmpty).getOrElse("Unknown"),
-        uri = file.toURI))
+    val hbox = new HBox()
+    hbox.getChildren.addAll(
+      availableListView,
+      Views.trackListView(queuedTracks))
+
+    val vbox = new VBox()
+    vbox.getChildren.addAll(
+      hbox,
+      new Button("Play/Pause"))
+    vbox
   }
 }
 
-class TrackListView(tracks: ObservableBuffer[Track]) {
-  var clickHandlers: mutable.ArrayBuffer[Track => Unit] =
-    mutable.ArrayBuffer()
+object ChannelApp {
+  val FullAppName: String = "Channel"
 
-  val root: TableView[Track] = {
-    val titleCol = new TableColumn[Track, String] {
-      text = "Title"
-      cellValueFactory = (cell => StringProperty(cell.value.title))
-    }
-    val albumCol = new TableColumn[Track, String] {
-      text = "Album"
-      cellValueFactory = (cell => StringProperty(cell.value.album))
-    }
-    val artistCol = new TableColumn[Track, String] {
-      text = "Artist"
-      cellValueFactory = (cell => StringProperty(cell.value.artist))
-    }
+  case class Config()
 
-    new TableView[Track](tracks) {
-      columns += (titleCol, albumCol, artistCol)
-      // Expand to parent
-      hgrow = Priority.Always
-      rowFactory = { _ =>
-        val row: TableRow[Track] = new TableRow()
-        row.onMouseClicked = { ev =>
-          if (isDoubleClick(ev) && !row.isEmpty) {
-            clickHandlers.foreach(_(row.getItem))
-          }
-        }
-        row
-      }
-    }
-  }
+  def loadConfig(): IO[Config] = IO(Config())
 
-  def onDoubleClicked(f: Track => Unit): Unit = {
-    clickHandlers += f
-  }
-
-  private def isDoubleClick(event: MouseEvent): Boolean =
-    event.getButton == MouseButton.PRIMARY && event.getClickCount == 2
-}
-
-object ChannelApp extends JFXApp {
-  private val player = new Player(IndexedSeq())
-
-  val availableTracks: ObservableBuffer[Track] =
-    ObservableBuffer(
-      getDirectoryFiles("/home/slacker/Music")
-        .map(Track.fromFile)
-        .collect {
-          // FIXME
-          case Some(track) => track
-        })
-
-  val queuedTracks = new ObservableBuffer[Track]()
-
-  stage = new JFXApp.PrimaryStage {
-    title.value = "Channel"
-    width = 1024
-    height = 740
-    scene = new Scene {
-      root = new HBox {
-        val availableTrackList = new TrackListView(availableTracks)
-        availableTrackList.onDoubleClicked { track =>
-          queuedTracks.append(track)
-          player.queue(track)
-        }
-        val queuedTrackList = new TrackListView(queuedTracks)
-        queuedTrackList.onDoubleClicked { track =>
-          println(s"Playing track: $track")
-          player.jumpTo(track)
-        }
-
-        children = Seq(
-          availableTrackList.root,
-          queuedTrackList.root
-        )
-      }
-    }
-  }
-
-  def getDirectoryFiles(path: String): List[java.io.File] = {
-    val directory = new java.io.File(path)
-    val files = directory.listFiles
-    files.flatMap { file =>
-      if (file.isFile)
-        Seq(file)
-      else
-        getDirectoryFiles(file.getPath)
-    }.toList
+  def main(args: Array[String]): Unit = {
+    // FIXME: we can't pass anything but string args to Application, so it'll
+    //        have to load configuration in a stateful maner.
+    Application.launch(classOf[ChannelApp], args: _*)
   }
 }
