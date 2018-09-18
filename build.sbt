@@ -28,6 +28,7 @@ lazy val root = (project in file("."))
       "net.jthink" % "jaudiotagger" % "2.2.3",
       // JavaFX
       "org.scalafx" %% "scalafx" % "8.0.144-R12",
+      // "org.scalafx" %% "scalafxml-core-sfx8" % "0.4",
       // Tests
       "org.scalatest" %% "scalatest" % "3.0.5" % Test
     ),

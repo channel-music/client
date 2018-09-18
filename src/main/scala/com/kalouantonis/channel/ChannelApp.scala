@@ -2,152 +2,88 @@ package com.kalouantonis.channel
 
 import java.io.File
 
-import javafx.application.{Application, Platform}
-import javafx.beans.value.ObservableValue
-import javafx.beans.property.SimpleStringProperty
-import javafx.collections.FXCollections
-import javafx.stage.Stage
-import javafx.scene.{Parent, Scene}
-import javafx.scene.control.{Button, TableColumn, TableView, TableRow}
-import javafx.scene.input.{MouseButton, MouseEvent}
-import javafx.scene.layout.{HBox, VBox}
-
-import scala.collection.JavaConverters._
-import scala.concurrent.ExecutionContext
-
-import cats.effect.IO
 import com.kalouantonis.channel.media.Track
-import monix.execution.Scheduler
-import monix.reactive.Observable
-import monix.execution.Cancelable
-import monix.execution.cancelables.SingleAssignmentCancelable
-import monix.reactive.Observable
-import monix.reactive.OverflowStrategy.Unbounded
+import scalafx.Includes._
+import scalafx.application.JFXApp
+import scalafx.beans.property.StringProperty
+import scalafx.beans.value.ObservableValue
+import scalafx.collections.ObservableBuffer
+import scalafx.scene.{Scene, Parent}
+import scalafx.scene.control.{Button, TableColumn, TableView}
+import scalafx.scene.layout.{HBox, GridPane}
 
-object schedulers {
-  val JavaFx = Scheduler(
-    new ExecutionContext {
-      override def execute(runnable: Runnable): Unit =
-        Platform.runLater(runnable)
+// object schedulers {
+//   val JavaFx = Scheduler(
+//     new ExecutionContext {
+//       override def execute(runnable: Runnable): Unit =
+//         Platform.runLater(runnable)
 
-      override def reportFailure(t: Throwable): Unit =
-        sys.error(t.getMessage())
-    })
+//       override def reportFailure(t: Throwable): Unit =
+//         sys.error(t.getMessage())
+//     })
 
-  object Implicits {
-    implicit val JavaFx = schedulers.JavaFx
-  }
-}
+//   object Implicits {
+//     implicit val JavaFx = schedulers.JavaFx
+//   }
+// }
 
-object Views {
-  def trackList(tracks: Seq[Track]): TableView[Track] = {
-    val delegate = new TableView[Track]()
-    delegate.getColumns.addAll(
-      column("Title", track => new SimpleStringProperty(track.title)),
-      column("Album", track => new SimpleStringProperty(track.album)),
-      column("Artist", track => new SimpleStringProperty(track.artist)))
-    delegate.setEditable(false)
-    delegate
-  }
-
-  private def column[Item, T](
-      title: String,
-      valueFactory: Item => ObservableValue[T]
-  ): TableColumn[Item, T] = {
-    val col = new TableColumn[Item, T](title)
-    col.setCellValueFactory(cell => valueFactory(cell.getValue))
-    col
-  }
-}
-
-object Observables {
-}
-
-// NOTE
-//
-// Jdk8 does not support starting an application by passing it NORMAL parameters,
-// so we use this as the entry point for now.
-//
-// On the plus side, it makes lifecycle management a bit simpler in regards
-// to running on a generic "platform" (e.g. mobile or desktop).
-final class ChannelApp extends Application {
-  import ChannelApp._
-
-  var availableTracks: Seq[Track] = Seq(
+object ChannelApp extends JFXApp {
+  val availableTracks: Seq[Track] = Seq(
     Track("N.I.B", "Black Sabbath", "Black Sabbath", new File("song.mp3").toURI),
     Track("Black Sabbath", "Black Sabbath", "Black Sabbath", new File("song.wav").toURI))
-  var queuedTracks: Seq[Track] = Seq()
+  val queuedTracks: Seq[Track] = availableTracks.headOption.toSeq
 
-  // This is basically the new main, is there a pre-stage initialization part? more callbacks?
-  override def start(primaryStage: Stage): Unit = {
-    // TODO
-    val config = ChannelApp.loadConfig().unsafeRunSync()
-    val root = loadUI(primaryStage, config)
-    primaryStage.setTitle(FullAppName)
-    primaryStage.setWidth(1260)
-    primaryStage.setHeight(860)
-    primaryStage.setScene(new Scene(root))
-    primaryStage.show()
-  }
+  sealed trait Msg
+  case class Queue(track: Track) extends Msg
+  case object Play extends Msg
+  case object Pause extends Msg
+  case object Stop extends Msg
 
-  def tableSelections(
-      table: TableView[Track])(
-      implicit scheduler: Scheduler
-  ): Observable[Track] =
-    Observable.create(Unbounded) { subscriber =>
-      def isDoubleClick(ev: MouseEvent): Boolean =
-        ev.getButton == MouseButton.PRIMARY && ev.getClickCount == 2
+  case class Model(availableTracks: Seq[Track], queuedTracks: Seq[Track])
 
-      val c = SingleAssignmentCancelable()
-      table.setRowFactory { _ =>
-        val row = new TableRow[Track]
-        // TODO: should I keep track of handlers?
-        row.setOnMouseClicked { ev =>
-          if (isDoubleClick(ev) && row.getItem != null) {
-            subscriber
-              .onNext(row.getItem)
-              .syncOnStopOrFailure(_ => c.cancel())
-          }
-        }
-        row
+  object MainWidget extends Elm.Widget[Parent, Model, Msg] {
+    private val mediaPanel: Parent =
+      new HBox {
+        children = Seq(
+          new Button("Previous"),
+          new Button("Play"),
+          new Button("Pause"),
+          new Button("Stop"),
+          new Button("Next"))
       }
-      c := Cancelable(() => table.setRowFactory(null))
+
+    private def trackList(tracks: Seq[Track]): TableView[Track] =
+      new TableView[Track] {
+        columns.addAll(
+          column[Track, String]("Title", track => StringProperty(track.title)),
+          column[Track, String]("Album", track => StringProperty(track.album)),
+          column[Track, String]("Artist", track => StringProperty(track.artist)))
+        editable = false
+        items = ObservableBuffer(tracks)
+      }
+
+    private def column[Item, T](
+      title: String,
+      valueFactory: Item => ObservableValue[T, T]
+    ): TableColumn[Item, T] = new TableColumn[Item, T] {
+      cellValueFactory = (cell => valueFactory(cell.getValue))
     }
 
-  def loadUI(primaryStage: Stage, config: Config): Parent = {
-    val availableListView = Views.trackList(availableTracks)
-    val queuedListView = Views.trackList(queuedTracks)
-
-    implicit val jfxScheduler = schedulers.JavaFx
-    tableSelections(availableListView)
-      .dump("O")
-      .subscribe()
-
-    availableListView.setItems(
-      FXCollections.observableList(availableTracks.asJava))
-
-    // TODO: produce a observable over the mouse click events
-    val hbox = new HBox()
-    hbox.getChildren.addAll(availableListView, queuedListView)
-
-    val vbox = new VBox()
-    vbox.getChildren.addAll(
-      hbox,
-      new Button("Play/Pause"))
-    vbox
+    override def view(model: Model): Elm.View[Parent, Msg] =
+      new Elm.View[Parent, Msg]({ () =>
+        new GridPane {
+          add(trackList(model.availableTracks), 0, 0)
+          add(trackList(model.queuedTracks), 1, 0)
+          add(mediaPanel, 0, 1)
+        }
+      })
   }
-}
 
-object ChannelApp {
-  val FullAppName: String = "Channel"
+  stage = new JFXApp.PrimaryStage {
+    val initialModel = new Model(availableTracks, queuedTracks)
 
-  case class Config()
-
-  def loadConfig(): IO[Config] = IO(Config())
-
-  def main(args: Array[String]): Unit = {
-    // FIXME: we can't pass anything but string args to Application, so it'll
-    //        have to load configuration in a stateful maner.
-    Application.launch(classOf[ChannelApp], args: _*)
+    scene = new Scene {
+      content = MainWidget.view(initialModel).root
+    }
   }
 }
