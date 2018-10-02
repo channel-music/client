@@ -8,6 +8,7 @@ import scalafx.application.JFXApp
 import scalafx.beans.property.StringProperty
 import scalafx.beans.value.ObservableValue
 import scalafx.collections.ObservableBuffer
+import scalafx.event.ActionEvent
 import scalafx.scene.{Scene, Parent}
 import scalafx.scene.control.{Button, TableColumn, TableView}
 import scalafx.scene.layout.{HBox, GridPane}
@@ -42,13 +43,24 @@ object ChannelApp extends JFXApp {
   case class Model(availableTracks: Seq[Track], queuedTracks: Seq[Track])
 
   object MainWidget extends Elm.Widget[Parent, Model, Msg] {
+    private def connect[EventType](handler: EventType => Msg): EventType => Unit =
+      event => {
+        println(s"event: $event, msg: ${handler(event)}")
+      }
+
     private val mediaPanel: Parent =
       new HBox {
         children = Seq(
           new Button("Previous"),
-          new Button("Play"),
-          new Button("Pause"),
-          new Button("Stop"),
+          new Button("Play") {
+            onAction = connect[ActionEvent](ev => Play)
+          },
+          new Button("Pause") {
+            onAction = connect[ActionEvent](ev => Pause)
+          },
+          new Button("Stop") {
+            onAction = connect[ActionEvent](ev => Stop)
+          },
           new Button("Next"))
       }
 
